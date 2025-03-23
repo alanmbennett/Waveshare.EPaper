@@ -14,5 +14,6 @@ public enum Epd7In5V2Commands
     DataStartTransmission2 = 0x13,
     DualSpi = 0x15,
     VcomAndDataIntervalSetting = 0x50,
+    TconSetting = 0x60,
     Tres = 0x61,
 }

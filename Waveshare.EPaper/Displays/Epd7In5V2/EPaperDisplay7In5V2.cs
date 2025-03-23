@@ -54,6 +54,10 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         SendData(0x00);
         
         SendCommand(Epd7In5V2Commands.VcomAndDataIntervalSetting);
+        SendData(0x10);
+        SendData(0x07);
+        
+        SendCommand(Epd7In5V2Commands.TconSetting);
         SendData(0x22);
     }
     
