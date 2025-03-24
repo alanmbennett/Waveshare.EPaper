@@ -146,9 +146,9 @@ public class EPaperDisplay7In5V2(IEPaperHardware hardware) : BaseEPaperDisplay(h
         SendCommand(Epd7In5V2Commands.DataStartTransmission2);
         for (var heightIndex = 0; heightIndex < _height; heightIndex++)
         {
-            for (var widthIndex = 0; widthIndex < _width; widthIndex++)
+            for (var widthIndex = 0; widthIndex < _widthByteArrayLength; widthIndex++)
             {
-                var index = widthIndex + heightIndex * _width;
+                var index = widthIndex + heightIndex * _widthByteArrayLength;
                 blackImageBytes[index] = (byte)~blackImageBytes[index];
             }
         }
