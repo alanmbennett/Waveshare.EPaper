@@ -1,7 +1,7 @@
 ﻿using System.Device.Gpio;
 using System.Device.Spi;
 
-namespace Waveshare.EPaper;
+namespace Waveshare.EPaper.Hardware;
 
 internal sealed class EPaperHardware : IEPaperHardware
 {
@@ -23,19 +23,19 @@ internal sealed class EPaperHardware : IEPaperHardware
         set => _gpio.Write(_resetPin, value);
     }
 
-    public PinValue DcPin
+    public PinValue SpiDcPin
     {
         get => _gpio.Read(_dcPin);
         set => _gpio.Write(_dcPin, value);
     }
 
-    public PinValue CsPin
+    public PinValue SpiCsPin
     {
         get => _gpio.Read(_csPin);
         set => _gpio.Write(_csPin, value);
     }
 
-    public PinValue PowerPin
+    private PinValue PowerPin
     {
         get => _gpio.Read(_powerPin);
         set => _gpio.Write(_powerPin, value);
@@ -66,8 +66,6 @@ internal sealed class EPaperHardware : IEPaperHardware
         var spiSettings = new SpiConnectionSettings(busId: 0, chipSelectLine: 0);
         _spiDevice = SpiDevice.Create(spiSettings);
     }
-
-    public void Delay(int milliseconds) => Thread.Sleep(milliseconds);
     
     private void GpioInitialize()
     {
@@ -77,13 +75,13 @@ internal sealed class EPaperHardware : IEPaperHardware
         _ = _gpio.OpenPin(_csPin, PinMode.Output);
         _ = _gpio.OpenPin(_powerPin, PinMode.Output);
         
-        CsPin = PinValue.High;
+        SpiCsPin = PinValue.High;
         PowerPin = PinValue.High;
     }
 
     public void SpiWrite(byte value) => _spiDevice.WriteByte(value);
     
-    public void SpiWrite(byte[] buffer) => _spiDevice.Write(buffer);
+    public void SpiWrite(ReadOnlySpan<byte> buffer) => _spiDevice.Write(buffer);
 
     public void SpiSendData(byte[] register)
     {
@@ -97,7 +95,7 @@ internal sealed class EPaperHardware : IEPaperHardware
     {
         int j = register;
         _gpio.SetPinMode(_masterOutSlaveInPin, PinMode.Output);
-        CsPin = PinValue.Low;
+        SpiCsPin = PinValue.Low;
         for (var i = 0; i < 8; i++)
         {
             SerialClockPin = PinValue.Low;
@@ -109,7 +107,7 @@ internal sealed class EPaperHardware : IEPaperHardware
         }
 
         SerialClockPin = PinValue.Low;
-        CsPin = PinValue.High;
+        SpiCsPin = PinValue.High;
     }
 
     ~EPaperHardware() => Dispose(false);
@@ -133,9 +131,9 @@ internal sealed class EPaperHardware : IEPaperHardware
             return;
         }
         
-        CsPin = PinValue.Low;
+        SpiCsPin = PinValue.Low;
         PowerPin = PinValue.High;
-        DcPin = PinValue.Low;
+        SpiDcPin = PinValue.Low;
         ResetPin = PinValue.Low;
         
         _spiDevice.Dispose();

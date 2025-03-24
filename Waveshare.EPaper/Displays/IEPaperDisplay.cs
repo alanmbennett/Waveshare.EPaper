@@ -1,3 +1,5 @@
+using Waveshare.EPaper.Hardware;
+
 namespace Waveshare.EPaper.Displays;
 
 public interface IEPaperDisplay : IDisposable
@@ -13,6 +15,10 @@ public interface IEPaperDisplay : IDisposable
     void Clear();
 
     void ClearBlack();
+
+    void Display(byte[] blackImageBytes);
+
+    void Delay(int milliseconds);
 
     void Sleep();
 }

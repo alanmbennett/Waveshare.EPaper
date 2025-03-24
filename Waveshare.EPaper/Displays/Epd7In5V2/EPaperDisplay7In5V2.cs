@@ -1,27 +1,23 @@
 using System.Device.Gpio;
 using System.Diagnostics;
+using Waveshare.EPaper.Hardware;
 
 namespace Waveshare.EPaper.Displays.Epd7In5V2;
 
-public class EPaperDisplay7In5V2 : IEPaperDisplay
+public class EPaperDisplay7In5V2(IEPaperHardware hardware) : BaseEPaperDisplay(hardware)
 {
     private bool _disposed;
-    private readonly IEPaperHardware _hardware;
-    
+    private bool _isSleeping;
+
     private const short _width = 800;
     private const short _height = 480;
     private const int _pixelPerByte = 8;
+    private const int _widthByteArrayLength = _width / _pixelPerByte;
+    
+    public static EPaperModule.ConfigureDisplay<EPaperDisplay7In5V2> Configuration { get; } 
+        = hardware => new EPaperDisplay7In5V2(hardware);
 
-    public EPaperDisplay7In5V2()
-    {
-        _hardware = new EPaperHardware();
-        
-        Debug.WriteLine("e-Paper Init and Clear...");
-        Initialize();
-        Clear();
-        _hardware.Delay(500);
-    }
-    public void Initialize()
+    public override void Initialize()
     {
         Reset();
         
@@ -38,7 +34,7 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         SendData(0x17);
         
         SendCommand(Epd7In5V2Commands.PowerOn);
-        _hardware.Delay(100);
+        Delay(100);
         WaitUntilIdle();
         
         SendCommand(Epd7In5V2Commands.PanelSetting);
@@ -59,67 +55,45 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         
         SendCommand(Epd7In5V2Commands.TconSetting);
         SendData(0x22);
+
+        _isSleeping = false;
     }
     
-    public void Reset()
+    public override void Reset()
     {
-        _hardware.ResetPin = PinValue.High;
-        _hardware.Delay(20);
-        _hardware.ResetPin = PinValue.Low;
-        _hardware.Delay(2);
-        _hardware.ResetPin = PinValue.High;
-        _hardware.Delay(20);
-    }
-
-    private void SendCommand(byte register)
-    {
-        _hardware.DcPin = PinValue.Low;
-        _hardware.CsPin = PinValue.Low;
-        _hardware.SpiWrite(register);
-        _hardware.CsPin = PinValue.High;
+        Hardware.ResetPin = PinValue.High;
+        Delay(20);
+        Hardware.ResetPin = PinValue.Low;
+        Delay(2);
+        Hardware.ResetPin = PinValue.High;
+        Delay(20);
     }
     
     private void SendCommand(Epd7In5V2Commands command) => SendCommand((byte)command);
 
-    private void SendData(byte data)
-    {
-        _hardware.DcPin = PinValue.High;
-        _hardware.CsPin = PinValue.Low;
-        _hardware.SpiWrite(data);
-        _hardware.CsPin = PinValue.High;
-    }
-
-    private void SendData(byte[] data)
-    {
-        _hardware.DcPin = PinValue.High;
-        _hardware.CsPin = PinValue.Low;
-        _hardware.SpiWrite(data);
-        _hardware.CsPin = PinValue.High;
-    }
-
-    public void WaitUntilIdle(CancellationToken token = default)
+    public override void WaitUntilIdle(CancellationToken token = default)
     {
         Debug.WriteLine("e-Paper busy");
         do
         {
             token.ThrowIfCancellationRequested();
-            _hardware.Delay(5);
-        } while (_hardware.BusyPin != PinValue.High);
+            Delay(5);
+        } while (Hardware.BusyPin != PinValue.High);
         
-        _hardware.Delay(5);
+        Delay(5);
         Debug.WriteLine("e-Paper busy release");
     }
     
-    public void TurnOnDisplay()
+    public override void TurnOnDisplay()
     {
         SendCommand(Epd7In5V2Commands.DisplayRefresh);
-        _hardware.Delay(100);
+        Delay(100);
         WaitUntilIdle();
     }
 
-    public void Clear()
+    public override void Clear()
     {
-        var imageBytes = new byte[_width / _pixelPerByte];
+        var imageBytes = new byte[_widthByteArrayLength];
         
         SendCommand(Epd7In5V2Commands.DataStartTransmission1);
         Array.Fill<byte>(imageBytes, 0xFF);
@@ -138,9 +112,9 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         TurnOnDisplay();
     }
     
-    public void ClearBlack()
+    public override void ClearBlack()
     {
-        var imageBytes = new byte[_width / _pixelPerByte];
+        var imageBytes = new byte[_widthByteArrayLength];
         
         SendCommand(Epd7In5V2Commands.DataStartTransmission1);
         Array.Fill<byte>(imageBytes, 0x00);
@@ -159,8 +133,40 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         TurnOnDisplay();
     }
 
-    public void Sleep()
+    public override void Display(byte[] blackImageBytes)
     {
+        ReadOnlySpan<byte> span = blackImageBytes;
+        
+        SendCommand(Epd7In5V2Commands.DataStartTransmission1);
+        for (var index = 0; index < _height; index++)
+        {
+            SendData(span.Slice(index * _widthByteArrayLength, _widthByteArrayLength));
+        }
+        
+        SendCommand(Epd7In5V2Commands.DataStartTransmission2);
+        for (var heightIndex = 0; heightIndex < _height; heightIndex++)
+        {
+            for (var widthIndex = 0; widthIndex < _width; widthIndex++)
+            {
+                var index = widthIndex + heightIndex * _width;
+                blackImageBytes[index] = (byte)~blackImageBytes[index];
+            }
+        }
+        for (var index = 0; index < _height; index++)
+        {
+            SendData(span.Slice(index * _widthByteArrayLength, _widthByteArrayLength));
+        }
+        
+        TurnOnDisplay();
+    }
+
+    public override void Sleep()
+    {
+        if (_isSleeping)
+        {
+            return;
+        }
+        
         SendCommand(Epd7In5V2Commands.VcomAndDataIntervalSetting);
         SendData(0xF7);
         
@@ -169,32 +175,22 @@ public class EPaperDisplay7In5V2 : IEPaperDisplay
         
         SendCommand(Epd7In5V2Commands.DeepSleep);
         SendData(0xA5);
-    }
-    
-    ~EPaperDisplay7In5V2() => Dispose(false);
-
-    public void Dispose()
-    {
-        Dispose(true);
-        GC.SuppressFinalize(this);
-    }
-    
-    private void Dispose(bool disposing)
-    {
-        if (_disposed)
-        {
-            return;
-        }
         
-        _disposed = true;
-        if (!disposing)
+        _isSleeping = true;
+    }
+    
+    protected override void Dispose(bool disposing)
+    {
+        if (!_disposed)
         {
-            return;
+            _disposed = true;
+            if (disposing)
+            {
+                Sleep();
+                Delay(2000);
+            }
         }
 
-        Sleep();
-        _hardware.Delay(2000);
-        Debug.WriteLine("close 5V, Module enters 0 power consumption ...");
-        _hardware.Dispose();
+        base.Dispose(disposing);
     }
 }

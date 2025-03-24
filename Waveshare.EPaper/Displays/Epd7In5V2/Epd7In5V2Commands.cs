@@ -1,6 +1,6 @@
 namespace Waveshare.EPaper.Displays.Epd7In5V2;
 
-public enum Epd7In5V2Commands
+internal enum Epd7In5V2Commands
 {
     Unknown = -1,
     PanelSetting = 0x00,
